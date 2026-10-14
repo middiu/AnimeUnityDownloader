@@ -87,13 +87,13 @@ class MainWindow(QMainWindow):
         """Construct all widgets of the main window."""
         self.setWindowTitle("AnimeUnity Downloader")
         self.setWindowIcon(QIcon(str(ICON_PATH)))
-        self.resize(920, 880)
-        self.setMinimumSize(820, 820)
+        self.resize(900, 820)
+        self.setMinimumSize(780, 740)
 
         central = QWidget()
         layout = QVBoxLayout(central)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
 
         layout.addWidget(self._build_header())
         layout.addWidget(self._build_input_card())
@@ -121,8 +121,8 @@ class MainWindow(QMainWindow):
         if not pixmap.isNull():
             logo_label.setPixmap(
                 pixmap.scaled(
-                    44,
-                    44,
+                    36,
+                    36,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 ),
@@ -151,27 +151,28 @@ class MainWindow(QMainWindow):
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum,
         )
         outer = QVBoxLayout(card)
-        outer.setContentsMargins(20, 18, 20, 18)
+        outer.setContentsMargins(18, 14, 18, 14)
         outer.setSpacing(0)
 
         self._url_edit = QLineEdit()
         self._url_edit.setObjectName("urlEdit")
         self._url_edit.setPlaceholderText("https://www.animeunity.so/anime/…")
-        self._url_edit.setFixedHeight(46)
         self._url_edit.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed,
         )
 
         outer.addWidget(self._make_field_label("Anime URL"))
-        outer.addSpacing(6)
+        outer.addSpacing(4)
         outer.addWidget(self._url_edit)
-        outer.addSpacing(18)
+        outer.addSpacing(12)
         outer.addWidget(self._build_mode_selector())
-        outer.addSpacing(10)
+        outer.addSpacing(8)
         outer.addWidget(self._build_filter_stack())
-        outer.addSpacing(18)
+        outer.addSpacing(12)
         outer.addWidget(self._build_folder_row())
-        outer.addSpacing(20)
+        outer.addSpacing(10)
+        outer.addWidget(self._build_workers_row())
+        outer.addSpacing(14)
         outer.addWidget(self._build_button_row())
         return card
 
@@ -181,7 +182,6 @@ class MainWindow(QMainWindow):
         container.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed,
         )
-        container.setMinimumHeight(44)
 
         self._mode_group = QButtonGroup(self)
         self._mode_buttons: list[QToolButton] = []
@@ -194,7 +194,6 @@ class MainWindow(QMainWindow):
             button.setText(text)
             button.setCheckable(True)
             button.setObjectName("segButton")
-            button.setMinimumHeight(36)
             self._mode_group.addButton(button, mode_id)
             self._mode_buttons.append(button)
             row.addWidget(button)
@@ -210,7 +209,7 @@ class MainWindow(QMainWindow):
         self._filter_stack.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed,
         )
-        self._filter_stack.setMinimumHeight(46)
+        self._filter_stack.setMinimumHeight(32)
 
         all_page = QLabel("Every available episode will be downloaded.")
         all_page.setObjectName("hintLabel")
@@ -258,7 +257,7 @@ class MainWindow(QMainWindow):
         container.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed,
         )
-        container.setMinimumHeight(46)
+        container.setMinimumHeight(32)
 
         row = QHBoxLayout(container)
         row.setContentsMargins(0, 0, 0, 0)
@@ -268,16 +267,41 @@ class MainWindow(QMainWindow):
         self._folder_edit.setObjectName("folderEdit")
         self._folder_edit.setReadOnly(True)
         self._folder_edit.setPlaceholderText("Default: <project>/Downloads")
-        self._folder_edit.setMinimumHeight(40)
 
         self._browse_button = QPushButton("Browse…")
         self._browse_button.setObjectName("browseButton")
-        self._browse_button.setMinimumHeight(40)
         self._browse_button.clicked.connect(self._on_browse_clicked)
 
         row.addWidget(self._make_field_label("Download folder"))
         row.addWidget(self._folder_edit, 1)
         row.addWidget(self._browse_button)
+        return container
+
+    def _build_workers_row(self) -> QWidget:
+        """Build the row selecting how many episodes download in parallel."""
+        container = QWidget()
+        container.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed,
+        )
+        container.setMinimumHeight(32)
+
+        row = QHBoxLayout(container)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+
+        self._workers_spin = QSpinBox()
+        self._workers_spin.setRange(1, 16)
+        self._workers_spin.setValue(2)
+        self._workers_spin.setToolTip(
+            "How many episodes download simultaneously (1–16).",
+        )
+
+        suffix = QLabel("episodes in parallel")
+        suffix.setObjectName("hintLabel")
+
+        row.addWidget(self._make_field_label("Parallel downloads"))
+        row.addWidget(self._workers_spin)
+        row.addWidget(suffix, 1)
         return container
 
     def _build_button_row(self) -> QWidget:
@@ -286,7 +310,7 @@ class MainWindow(QMainWindow):
         container.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed,
         )
-        container.setMinimumHeight(56)
+        container.setMinimumHeight(40)
 
         row = QHBoxLayout(container)
         row.setContentsMargins(0, 0, 0, 0)
@@ -294,13 +318,11 @@ class MainWindow(QMainWindow):
 
         self._start_button = QPushButton("Start Download")
         self._start_button.setObjectName("startButton")
-        self._start_button.setMinimumHeight(46)
         self._start_button.clicked.connect(self._on_start_clicked)
 
         self._cancel_button = QPushButton("Cancel")
         self._cancel_button.setObjectName("cancelButton")
         self._cancel_button.setEnabled(False)
-        self._cancel_button.setMinimumHeight(46)
         self._cancel_button.clicked.connect(self._on_cancel_clicked)
 
         row.addWidget(self._start_button)
@@ -314,10 +336,10 @@ class MainWindow(QMainWindow):
         card.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding,
         )
-        card.setMinimumHeight(260)
+        card.setMinimumHeight(220)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(18, 14, 18, 14)
+        layout.setSpacing(8)
 
         header_row = QHBoxLayout()
         self._anime_label = QLabel("Ready.")
@@ -358,15 +380,15 @@ class MainWindow(QMainWindow):
         card.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum,
         )
-        card.setMinimumHeight(160)
+        card.setMinimumHeight(140)
         layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 14, 20, 14)
-        layout.setSpacing(8)
+        layout.setContentsMargins(18, 12, 18, 12)
+        layout.setSpacing(6)
 
         self._log_pane = QPlainTextEdit()
         self._log_pane.setObjectName("logPane")
         self._log_pane.setReadOnly(True)
-        self._log_pane.setMaximumHeight(150)
+        self._log_pane.setMaximumHeight(130)
 
         layout.addWidget(self._make_field_label("Log"))
         layout.addWidget(self._log_pane)
@@ -383,10 +405,18 @@ class MainWindow(QMainWindow):
         self._worker.finished.connect(self._on_worker_finished)
 
     def _restore_settings(self) -> None:
-        """Restore the last used download folder from persistent settings."""
+        """Restore the last used download folder and worker count."""
         folder = str(self._settings.value("last_folder", ""))
         if folder and Path(folder).is_dir():
             self._folder_edit.setText(folder)
+
+        last_workers = self._settings.value("last_workers", 2)
+        try:
+            workers_value = int(last_workers)
+        except (TypeError, ValueError):
+            workers_value = 2
+        workers_value = max(1, min(16, workers_value))
+        self._workers_spin.setValue(workers_value)
 
     # ============================
     # Slots
@@ -414,6 +444,8 @@ class MainWindow(QMainWindow):
         except ValueError as validation_error:
             self._set_status(str(validation_error), "error")
             return
+
+        self._settings.setValue("last_workers", self._workers_spin.value())
 
         self._reset_results()
         self._last_error = None
@@ -447,6 +479,8 @@ class MainWindow(QMainWindow):
         elif kind == "error":
             self._last_error = str(event.get("message", "Unknown error"))
             self._set_status(f"Error: {self._last_error}", "error")
+        elif kind == "fail":
+            self._on_fail_event(event)
 
     def _on_task_event(self, event: dict) -> None:
         """Register the overall task or create a row for an episode task."""
@@ -488,6 +522,16 @@ class MainWindow(QMainWindow):
             row["bar"].setValue(100)
             row["state"].setText("Done")
 
+    def _on_fail_event(self, event: dict) -> None:
+        """Mark a single episode row as failed with its error message."""
+        row = self._episode_rows.get(event.get("id"))
+        if row is None:
+            return
+        row["failed"] = True
+        row["state"].setText("Failed")
+        row["state"].setStyleSheet(f"color: {DANGER};")
+        row["bar"].setValue(0)
+
     def _on_log_line(self, line: str) -> None:
         """Append a log line and keep the newest line visible."""
         self._log_pane.appendPlainText(line)
@@ -526,6 +570,13 @@ class MainWindow(QMainWindow):
         total = len(self._episode_rows)
         if completed < total:
             self._mark_incomplete_rows()
+        failed = sum(1 for row in self._episode_rows.values() if row["failed"])
+        if failed:
+            self._set_status(
+                f"Completed {completed} of {total} episodes ({failed} failed).",
+                "success" if completed == total - failed else "error",
+            )
+            return
         self._set_status(f"Completed {completed} of {total} episodes.", "success")
 
     # ============================
@@ -547,6 +598,7 @@ class MainWindow(QMainWindow):
             self._end_spin,
             self._episodes_edit,
             self._folder_edit,
+            self._workers_spin,
         )
         for widget in widgets:
             widget.setEnabled(not running)
@@ -606,12 +658,13 @@ class MainWindow(QMainWindow):
             "bar": progress_bar,
             "state": state_label,
             "done": False,
+            "failed": False,
         }
 
     def _mark_incomplete_rows(self) -> None:
         """Flag every episode row that did not reach completion."""
         for row in self._episode_rows.values():
-            if not row["done"]:
+            if not row["done"] and not row["failed"]:
                 row["state"].setText("Incomplete")
 
     def _build_arguments(self) -> list[str]:
@@ -633,6 +686,9 @@ class MainWindow(QMainWindow):
         folder = self._folder_edit.text().strip()
         if folder:
             arguments += ["--custom-path", folder]
+
+        workers = self._workers_spin.value()
+        arguments += ["--workers", str(workers)]
 
         return arguments
 

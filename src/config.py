@@ -161,6 +161,15 @@ def setup_parser(
             default=False,
             help="Emit newline-delimited JSON progress events on stdout (used by the GUI).",
         )
+        parser.add_argument(
+            "--workers",
+            type=int,
+            default=DOWNLOAD_WORKERS,
+            help=(
+                "Maximum number of parallel episode downloads "
+                f"(default: {DOWNLOAD_WORKERS})."
+            ),
+        )
 
     add_common_arguments(parser)
     return parser

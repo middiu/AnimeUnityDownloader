@@ -93,6 +93,8 @@ python3 gui.py
 
 - Paste an anime URL and choose between **All episodes**, a **Range** (`--start`/`--end`), or a specific **Episodes** list (`--episodes 1,3,7`).
 - Select the download folder with the native OS folder picker; the choice is remembered across sessions. Files are saved in `<selected folder>/Downloads/<anime name>`, mirroring the CLI's `--custom-path` behavior.
+- Tune **Parallel downloads** (1–16, default 2) to control how many episodes download at once via `--workers`. The last value is remembered across sessions.
+- Per-episode failures surface as a distinct red **Failed** state (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get one automatic retry before being marked failed.
 - Live per-episode and overall progress bars, fed by the downloader's machine-readable `--progress-json` event stream.
 - A **Cancel** button stops the download at any time. Note that the episode currently being downloaded is written directly to its final name, so a partial file may remain after cancelling.
 - Errors and the downloader's stderr output are shown in a log pane.
@@ -106,13 +108,14 @@ To download a single anime, you can use the `anime_downloader.py` script.
 Run the script followed by the anime URL you want to download:
 
 ```bash
-python3 anime_downloader.py <anime_url> [--start <start_episode>] [--end <end_episode>] [--episodes <episode_list>]
+python3 anime_downloader.py <anime_url> [--start <start_episode>] [--end <end_episode>] [--episodes <episode_list>] [--workers <count>]
 ```
 
 - `<anime_url>`: The URL of the anime series.
 - `--start <start_episode>`: The starting episode number (optional).
 - `--end <end_episode>`: The ending episode number (optional).
 - `--episodes <episode_list>`: Comma or space separated list of specific episode numbers to download.
+- `--workers <count>`: Maximum number of episodes downloaded in parallel (default: 2).
 
 ### Examples
 
@@ -146,6 +149,12 @@ python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --epi
 ```
 
 This is useful when you already have some episodes and only need to download the missing ones, avoiding re-downloading an entire range.
+
+To cap the number of episodes downloaded at the same time (defaults to 2), pass `--workers`:
+
+```bash
+python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --workers 4
+```
 
 ## Batch Download
 

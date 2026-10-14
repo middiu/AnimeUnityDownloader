@@ -99,3 +99,15 @@ class CallbackProgress:
     def advance(self, task_id: int) -> None:
         """Emit a one-step advance for the given task."""
         self._callback({"event": "advance", "id": task_id})
+
+    def report_failure(self, task_id: int, message: str) -> None:
+        """Emit a per-episode failure event with the given message.
+
+        Consumed by the graphical interface to render a distinct ``Failed``
+        state; ignored by the rich terminal progress path.
+        """
+        self._callback({
+            "event": "fail",
+            "id": task_id,
+            "message": str(message),
+        })
