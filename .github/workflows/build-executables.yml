@@ -44,15 +44,14 @@ jobs:
           pip install pyinstaller==6.17.0
 
       - name: Build executable
+        shell: bash
         run: |
           # ``anime_downloader`` is imported lazily from ``gui.py`` only when
           # the bundled binary is re-launched with ``--run-downloader``, so
           # PyInstaller's static analysis cannot see the import. Bundle it
           # explicitly as a hidden import so the in-process downloader mode
           # works on the user's machine.
-          pyinstaller --noconfirm --onedir --windowed \
-            --hidden-import=anime_downloader \
-            --name AnimeUnityDownloader gui.py
+          pyinstaller --noconfirm --onedir --windowed --hidden-import=anime_downloader --name AnimeUnityDownloader gui.py
 
       - name: Package artifact
         shell: bash
