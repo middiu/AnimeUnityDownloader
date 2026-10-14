@@ -155,6 +155,12 @@ def setup_parser(
                 "Example: --episodes 1,3,7,12 or --episodes 1 3 7 12"
             ),
         )
+        parser.add_argument(
+            "--progress-json",
+            action="store_true",
+            default=False,
+            help="Emit newline-delimited JSON progress events on stdout (used by the GUI).",
+        )
 
     add_common_arguments(parser)
     return parser

@@ -1,0 +1,6 @@
+# Extra dependencies required only by the graphical interface (gui.py).
+# Kept separate so that command-line users can skip installing Qt.
+# PySide6_Essentials provides QtCore/QtGui/QtWidgets without pulling in the
+# full PySide6 meta-package (which also drags in Addons and WebEngine).
+# Exact pin verified compatible with Python 3.10 through 3.14 (abi3 wheels).
+PySide6_Essentials==6.11.2

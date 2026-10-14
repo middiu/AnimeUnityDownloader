@@ -12,8 +12,12 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import json
 import random
+import sys
+import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import requests
@@ -29,7 +33,11 @@ from src.download_utils import (
 )
 from src.file_utils import create_download_directory
 from src.general_utils import clear_terminal, fetch_page, fetch_page_httpx
-from src.progress_utils import create_progress_bar, create_progress_table
+from src.progress_utils import (
+    CallbackProgress,
+    create_progress_bar,
+    create_progress_table,
+)
 
 
 def download_episode(
@@ -70,8 +78,18 @@ def process_video_url(video_url: str, download_path: str, task_info: tuple) -> N
     download_episode(download_link, download_path, task_info)
 
 
-def download_anime(anime_name: str, video_urls: list[str], download_path: str) -> None:
+def download_anime(
+    anime_name: str,
+    video_urls: list[str],
+    download_path: str,
+    progress_callback: Callable[[dict], None] | None = None,
+) -> None:
     """Download episodes of a specified anime from provided video URLs."""
+    if progress_callback is not None:
+        job_progress = CallbackProgress(progress_callback)
+        run_in_parallel(process_video_url, video_urls, job_progress, download_path)
+        return
+
     job_progress = create_progress_bar()
     progress_table = create_progress_table(anime_name, job_progress)
 
@@ -79,12 +97,16 @@ def download_anime(anime_name: str, video_urls: list[str], download_path: str) -
         run_in_parallel(process_video_url, video_urls, job_progress, download_path)
 
 
+# The download request is naturally described by these six parameters;
+# bundling them would only obscure the signature shared with main.py.
+# pylint: disable=too-many-arguments, too-many-positional-arguments
 async def process_anime_download(
     url: str,
     start_episode: int | None = None,
     end_episode: int | None = None,
     episodes: list[int] | None = None,
     custom_path: str | None = None,
+    progress_callback: Callable[[dict], None] | None = None,
 ) -> None:
     """Process the download of an anime from the specified URL."""
     soup = fetch_page_httpx(url)
@@ -96,8 +118,16 @@ async def process_anime_download(
     )
     anime_name = crawler.extract_anime_name(soup, url)
     download_path = create_download_directory(anime_name, custom_path=custom_path)
+
+    if progress_callback is not None and anime_name:
+        progress_callback({
+            "event": "anime",
+            "name": anime_name,
+            "path": str(download_path),
+        })
+
     video_urls = await crawler.collect_video_urls()
-    download_anime(anime_name, video_urls, download_path)
+    download_anime(anime_name, video_urls, download_path, progress_callback)
 
 
 def parse_episodes_list(episodes_raw: list[str] | None) -> list[int] | None:
@@ -114,18 +144,59 @@ def parse_episodes_list(episodes_raw: list[str] | None) -> list[int] | None:
     )
 
 
+def make_json_emitter() -> Callable[[dict], None]:
+    """Create a thread-safe emitter printing each event as one JSON stdout line."""
+    lock = threading.Lock()
+
+    def emit(event: dict) -> None:
+        """Serialize and print a single progress event."""
+        with lock:
+            print(json.dumps(event), flush=True)
+
+    return emit
+
+
 async def main() -> None:
     """Execute the script to download anime episodes from a given AnimeUnity URL."""
-    clear_terminal()
     args = parse_arguments()
+    use_json = args.progress_json
     episodes = parse_episodes_list(args.episodes)
-    await process_anime_download(
-        args.url,
-        start_episode=args.start,
-        end_episode=args.end,
-        episodes=episodes,
-        custom_path=args.custom_path,
-    )
+
+    if not use_json:
+        clear_terminal()
+        await process_anime_download(
+            args.url,
+            start_episode=args.start,
+            end_episode=args.end,
+            episodes=episodes,
+            custom_path=args.custom_path,
+        )
+        return
+
+    emit = make_json_emitter()
+    try:
+        await process_anime_download(
+            args.url,
+            start_episode=args.start,
+            end_episode=args.end,
+            episodes=episodes,
+            custom_path=args.custom_path,
+            progress_callback=emit,
+        )
+
+    except SystemExit as exit_error:
+        emit({
+            "event": "error",
+            "message": f"Download failed with exit code {exit_error.code}",
+        })
+        sys.exit(1)
+
+    except Exception as exc:  # pylint: disable=broad-except
+        emit({"event": "error", "message": f"{type(exc).__name__}: {exc}"})
+        sys.exit(1)
+
+    else:
+        emit({"event": "done"})
 
 
 if __name__ == "__main__":
