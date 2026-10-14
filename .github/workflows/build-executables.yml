@@ -83,7 +83,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/AnimeUnityDownloader-macos/AnimeUnityDownloader-macos.zip
+            artifacts/AnimeUnityDownloader-macOS/AnimeUnityDownloader-macos.zip
             artifacts/AnimeUnityDownloader-Windows/AnimeUnityDownloader-windows.zip
             artifacts/AnimeUnityDownloader-Linux/AnimeUnityDownloader-linux.zip
           generate_release_notes: true
