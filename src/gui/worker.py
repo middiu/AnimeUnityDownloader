@@ -48,12 +48,26 @@ class DownloadWorker(QObject):
         return self._process.state() != QProcess.ProcessState.NotRunning
 
     def start(self, arguments: list[str], working_directory: str) -> None:
-        """Start the downloader with the given command-line arguments."""
+        """Start the downloader with the given command-line arguments.
+
+        In a PyInstaller bundle (``sys.frozen``), ``sys.executable`` is the GUI
+        binary itself — re-invoking it with a script path would launch a
+        second GUI window instead of running the downloader. The bundled
+        binary accepts a hidden ``--run-downloader`` flag (see ``gui.py``) that
+        runs the CLI downloader in-process and exits, so we use that instead.
+        In a normal Python install, ``sys.executable`` is the interpreter and
+        ``arguments[0]`` is the path to ``anime_downloader.py``.
+        """
         self._stdout_buffer = ""
         self._stderr_buffer = ""
         self._process.setWorkingDirectory(working_directory)
         self._process.setProgram(sys.executable)
-        self._process.setArguments(arguments)
+        if getattr(sys, "frozen", False):
+            # Bundled binary: drive the same binary in CLI mode. The
+            # downloader script lives inside the bundle as a hidden import.
+            self._process.setArguments(["--run-downloader", *arguments])
+        else:
+            self._process.setArguments(arguments)
         self._process.start()
 
     def cancel(self) -> None:
