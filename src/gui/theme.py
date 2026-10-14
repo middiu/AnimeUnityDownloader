@@ -67,10 +67,6 @@ QLabel#episodeName {{
     font-size: 12px;
     color: {TEXT};
 }}
-QLabel#episodeState {{
-    color: {MUTED};
-    font-size: 11px;
-}}
 
 /* ---------- Cards ---------- */
 QFrame#card {{
@@ -203,8 +199,41 @@ QProgressBar#overallBar {{
     color: {TEXT};
 }}
 QProgressBar#episodeBar {{
-    min-height: 6px;
-    max-height: 6px;
+    min-height: 12px;
+    max-height: 14px;
+    font-size: 10px;
+    font-weight: 700;
+    color: {TEXT};
+    background-color: {SURFACE_ALT};
+    border-radius: 6px;
+    text-align: center;
+}}
+/* Default + active + queued: violet→pink gradient on the chunk. The
+   bar's ``state`` dynamic property is flipped by ``MainWindow._set_row_state``
+   to recolour the chunk per row state. */
+QProgressBar#episodeBar::chunk,
+QProgressBar#episodeBar[state="queued"]::chunk,
+QProgressBar#episodeBar[state="active"]::chunk {{
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 {VIOLET}, stop:1 {PINK});
+    border-radius: 6px;
+}}
+/* Queued: outline so it reads as "idle" before the worker starts. */
+QProgressBar#episodeBar[state="queued"] {{
+    background-color: {SURFACE_ALT};
+    border: 1px solid {BORDER};
+}}
+QProgressBar#episodeBar[state="done"]::chunk {{
+    background-color: {SUCCESS};
+    border-radius: 6px;
+}}
+QProgressBar#episodeBar[state="failed"]::chunk {{
+    background-color: {DANGER};
+    border-radius: 6px;
+}}
+QProgressBar#episodeBar[state="incomplete"]::chunk {{
+    background-color: {MUTED};
+    border-radius: 6px;
 }}
 
 /* ---------- Scroll area ---------- */
