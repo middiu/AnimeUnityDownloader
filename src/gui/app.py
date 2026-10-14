@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
         self._cancelled = False
         self._set_running(True)
         self._set_status("Fetching anime info…", "running")
-        self._worker.start(arguments, str(REPO_ROOT))
+        self._worker.start(SCRIPT_PATH, arguments, str(REPO_ROOT))
 
     def _on_cancel_clicked(self) -> None:
         """Abort the running download."""
@@ -675,7 +675,7 @@ class MainWindow(QMainWindow):
                 "Enter a valid anime URL (it must start with http:// or https://).",
             )
 
-        arguments = [str(SCRIPT_PATH), url, "--progress-json"]
+        arguments = [url, "--progress-json"]
 
         mode = self._mode_group.checkedId()
         if mode == MODE_RANGE:

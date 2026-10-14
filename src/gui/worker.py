@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 # The PySide6 stubs confuse astroid's member resolution; the Qt imports below
 # resolve correctly at runtime.
@@ -47,27 +48,46 @@ class DownloadWorker(QObject):
         """Return whether the download process is currently running."""
         return self._process.state() != QProcess.ProcessState.NotRunning
 
-    def start(self, arguments: list[str], working_directory: str) -> None:
+    def start(
+        self,
+        script_path: Path,
+        arguments: list[str],
+        working_directory: str,
+    ) -> None:
         """Start the downloader with the given command-line arguments.
+
+        The ``arguments`` list contains only the user-facing flags (the anime
+        URL, ``--progress-json``, range/episode selectors, etc.) — the worker
+        is responsible for choosing the right program to run, because the
+        answer differs between a regular Python install and a PyInstaller
+        bundle.
 
         In a PyInstaller bundle (``sys.frozen``), ``sys.executable`` is the GUI
         binary itself — re-invoking it with a script path would launch a
         second GUI window instead of running the downloader. The bundled
         binary accepts a hidden ``--run-downloader`` flag (see ``gui.py``) that
         runs the CLI downloader in-process and exits, so we use that instead.
+        ``script_path`` is unused in this mode (the downloader lives inside
+        the bundle as a hidden import).
+
         In a normal Python install, ``sys.executable`` is the interpreter and
-        ``arguments[0]`` is the path to ``anime_downloader.py``.
+        the script path is the first positional argument passed to it.
+        Prepending the script path here — rather than in the caller — keeps
+        ``arguments`` free of host-specific paths so the same value can be
+        reused in the frozen mode without the script path leaking into
+        argparse.
         """
         self._stdout_buffer = ""
         self._stderr_buffer = ""
         self._process.setWorkingDirectory(working_directory)
-        self._process.setProgram(sys.executable)
         if getattr(sys, "frozen", False):
             # Bundled binary: drive the same binary in CLI mode. The
             # downloader script lives inside the bundle as a hidden import.
+            self._process.setProgram(sys.executable)
             self._process.setArguments(["--run-downloader", *arguments])
         else:
-            self._process.setArguments(arguments)
+            self._process.setProgram(sys.executable)
+            self._process.setArguments([str(script_path), *arguments])
         self._process.start()
 
     def cancel(self) -> None:
