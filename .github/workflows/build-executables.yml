@@ -51,12 +51,13 @@ jobs:
         run: |
           mkdir -p dist-pkg
           if [ "$RUNNER_OS" == "Windows" ]; then
-            (cd dist && zip -r ../dist-pkg/AnimeUnityDownloader-windows.zip AnimeUnityDownloader)
+            # Windows runners have no `zip` on PATH; use PowerShell instead.
+            powershell -NoProfile -Command "Compress-Archive -Path dist/AnimeUnityDownloader -DestinationPath dist-pkg/AnimeUnityDownloader-windows.zip -Force"
           elif [ "$RUNNER_OS" == "macOS" ]; then
             cp -R dist/AnimeUnityDownloader.app dist-pkg/
             (cd dist-pkg && zip -r AnimeUnityDownloader-macos.zip AnimeUnityDownloader.app)
           else
-            (cd dist && tar -czf ../dist-pkg/AnimeUnityDownloader-linux.tar.gz AnimeUnityDownloader)
+            (cd dist && zip -r ../dist-pkg/AnimeUnityDownloader-linux.zip AnimeUnityDownloader)
           fi
 
       - name: Upload artifact

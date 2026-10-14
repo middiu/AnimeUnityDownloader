@@ -8,11 +8,11 @@ lint and to restyle.
 # ============================
 # Palette
 # ============================
-BG = "#0B0B12"            # App background (deep near-black indigo)
-SURFACE = "#14141F"       # Card background
-SURFACE_ALT = "#1C1C26"   # Input fields and progress tracks
-BORDER = "#262640"        # Card borders
-INPUT_BORDER = "#2A2A3A"  # Input borders
+BG = "#0E0E16"            # App background (deep near-black indigo)
+SURFACE = "#171724"       # Card background
+SURFACE_ALT = "#1F1F2E"   # Input fields and progress tracks
+BORDER = "#2C2C44"        # Card borders
+INPUT_BORDER = "#33334A"  # Input borders
 TEXT = "#ECEAF4"          # Primary text
 MUTED = "#8E8AA3"         # Secondary text
 VIOLET = "#8B5CF6"        # Accent start
@@ -39,7 +39,7 @@ QLabel {{
     color: {TEXT};
 }}
 QLabel#titleLabel {{
-    font-size: 22px;
+    font-size: 19px;
     font-weight: 800;
 }}
 QLabel#subtitleLabel {{
@@ -78,23 +78,28 @@ QFrame#card {{
     border: 1px solid {BORDER};
     border-radius: 14px;
 }}
+QFrame#card > QWidget,
+QFrame#card > QStackedWidget,
+QFrame#card > QStackedWidget > QWidget {{
+    background: transparent;
+}}
 QFrame#episodeRow {{
     background: transparent;
     border: none;
 }}
 
 /* ---------- Inputs ---------- */
-QLineEdit, QSpinBox {{
+QLineEdit, QSpinBox, QAbstractSpinBox {{
     background-color: {SURFACE_ALT};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 10px;
-    padding: 10px 14px;
+    border-radius: 8px;
+    padding: 6px 12px;
     color: {TEXT};
-    font-size: 14px;
-    min-height: 20px;
+    font-size: 13px;
+    min-height: 14px;
     selection-background-color: {VIOLET};
 }}
-QLineEdit:disabled, QSpinBox:disabled {{
+QLineEdit:disabled, QSpinBox:disabled, QAbstractSpinBox:disabled {{
     color: {MUTED};
 }}
 QLineEdit:focus, QSpinBox:focus {{
@@ -109,11 +114,11 @@ QPushButton#browseButton {{
     background-color: {SURFACE_ALT};
     color: {TEXT};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 10px;
-    padding: 10px 18px;
-    font-size: 14px;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
     font-weight: 600;
-    min-height: 18px;
+    min-height: 14px;
 }}
 QPushButton#browseButton:hover {{
     border-color: {VIOLET};
@@ -126,11 +131,11 @@ QPushButton#startButton {{
         stop:0 {VIOLET}, stop:1 {PINK});
     color: #FFFFFF;
     font-weight: 700;
-    font-size: 16px;
+    font-size: 14px;
     border: none;
-    border-radius: 12px;
-    padding: 12px 32px;
-    min-height: 26px;
+    border-radius: 10px;
+    padding: 8px 22px;
+    min-height: 18px;
 }}
 QPushButton#startButton:hover {{
     background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0,
@@ -144,11 +149,11 @@ QPushButton#cancelButton {{
     background: transparent;
     color: {DANGER};
     border: 1px solid {DANGER};
-    border-radius: 12px;
-    padding: 12px 26px;
-    font-size: 16px;
+    border-radius: 10px;
+    padding: 8px 20px;
+    font-size: 14px;
     font-weight: 700;
-    min-height: 26px;
+    min-height: 18px;
 }}
 QPushButton#cancelButton:disabled {{
     color: {MUTED};
@@ -160,11 +165,11 @@ QToolButton#segButton {{
     background-color: transparent;
     color: {MUTED};
     border: 1px solid {INPUT_BORDER};
-    border-radius: 10px;
-    padding: 9px 20px;
-    font-size: 14px;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 13px;
     font-weight: 600;
-    min-height: 18px;
+    min-height: 14px;
 }}
 QToolButton#segButton:hover {{
     color: {TEXT};
@@ -192,14 +197,14 @@ QProgressBar::chunk {{
     border-radius: 7px;
 }}
 QProgressBar#overallBar {{
-    min-height: 20px;
-    font-size: 12px;
+    min-height: 14px;
+    font-size: 11px;
     font-weight: 700;
     color: {TEXT};
 }}
 QProgressBar#episodeBar {{
-    min-height: 8px;
-    max-height: 8px;
+    min-height: 6px;
+    max-height: 6px;
 }}
 
 /* ---------- Scroll area ---------- */
@@ -229,10 +234,10 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
 
 /* ---------- Log pane ---------- */
 QPlainTextEdit#logPane {{
-    background-color: #0A0A10;
+    background-color: {SURFACE};
     border: 1px solid {BORDER};
-    border-radius: 10px;
-    padding: 8px;
+    border-radius: 8px;
+    padding: 6px 8px;
     color: {MUTED};
     font-family: "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
     font-size: 11px;
