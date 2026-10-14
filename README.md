@@ -22,22 +22,29 @@
 - `fake_useragent` - for generating fake user agents for web scraping
 - `httpx` - for making asynchronous HTTP requests
 
+The desktop GUI additionally uses `PySide6` (Qt), which is optional and listed in `requirements-gui.txt`.
+
 <details>
 
 <summary>Show directory structure</summary>
 
 ```
 project-root/
-├── helpers/
-│ ├── crawlers/
+├── src/
+│ ├── crawler/
 │ │ ├── crawler.py        # Module for crawling tasks
 │ │ └── crawler_utils.py  # Utilities for extracting media download links
+│ ├── gui/
+│ │ ├── app.py            # Main window of the desktop interface
+│ │ ├── theme.py          # Color palette and Qt stylesheet
+│ │ └── worker.py          # QProcess orchestration of the downloader
 │ ├── config.py           # Manages constants and settings used across the project
 │ ├── download_utils.py   # Utilities for managing the download process
 │ ├── file_utils.py       # Utilities for managing file operations
 │ ├── general_utils.py    # Miscellaneous utility functions
 │ └── progress_utils.py   # Tools for progress tracking and reporting
 ├── anime_downloader.py   # Module for downloading anime episodes
+├── gui.py                # Entry point of the desktop interface
 ├── main.py               # Main script to run the downloader
 └── URLs.txt              # Text file containing anime URLs
 ```
@@ -63,6 +70,32 @@ cd AnimeUnityDownloader
 ```bash
 pip install -r requirements.txt
 ```
+
+4. (Optional) To use the graphical interface, also install the GUI dependencies:
+
+```bash
+pip install -r requirements-gui.txt
+```
+
+## Graphical Interface (Optional)
+
+A desktop application is available on top of the command-line tool. It wraps
+`anime_downloader.py` in a native window with a dark theme and runs it as a
+subprocess, so the CLI stays the canonical interface.
+
+### Usage
+
+```bash
+python3 gui.py
+```
+
+### Features
+
+- Paste an anime URL and choose between **All episodes**, a **Range** (`--start`/`--end`), or a specific **Episodes** list (`--episodes 1,3,7`).
+- Select the download folder with the native OS folder picker; the choice is remembered across sessions. Files are saved in `<selected folder>/Downloads/<anime name>`, mirroring the CLI's `--custom-path` behavior.
+- Live per-episode and overall progress bars, fed by the downloader's machine-readable `--progress-json` event stream.
+- A **Cancel** button stops the download at any time. Note that the episode currently being downloaded is written directly to its final name, so a partial file may remain after cancelling.
+- Errors and the downloader's stderr output are shown in a log pane.
 
 ## Single Anime Download
 
