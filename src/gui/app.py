@@ -336,7 +336,7 @@ class MainWindow(QMainWindow):
         card.setSizePolicy(
             QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding,
         )
-        card.setMinimumHeight(220)
+        card.setMinimumHeight(320)
         layout = QVBoxLayout(card)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(8)
@@ -496,8 +496,6 @@ class MainWindow(QMainWindow):
 
         row = self._create_episode_row(description)
         self._episode_rows[task_id] = row
-        if not event.get("visible", False):
-            row["frame"].hide()
 
     def _on_update_event(self, event: dict) -> None:
         """Apply a progress update to its episode row."""
@@ -510,27 +508,29 @@ class MainWindow(QMainWindow):
 
         if completed is not None:
             percentage = min(max(float(completed), 0.0), 100.0)
-            row["bar"].setValue(int(round(percentage)))
-            if visible is not False:
-                row["state"].setText("Downloading")
+            value = int(round(percentage))
+            row["bar"].setValue(value)
+            row["bar"].setFormat(f"{value}%")
+            # Any percentage update means the bar is no longer queued.
+            self._set_row_state(row["bar"], "active")
 
         if visible is True:
-            row["frame"].show()
-            row["state"].setText("Downloading")
+            # Retry signal: ensure the bar shows the active gradient even
+            # if the row had been marked failed.
+            self._set_row_state(row["bar"], "active")
         elif visible is False and completed is not None and float(completed) >= 100.0:
             row["done"] = True
             row["bar"].setValue(100)
-            row["state"].setText("Done")
+            row["bar"].setFormat("100%")
+            self._set_row_state(row["bar"], "done")
 
     def _on_fail_event(self, event: dict) -> None:
-        """Mark a single episode row as failed with its error message."""
+        """Mark a single episode row as failed via its bar state."""
         row = self._episode_rows.get(event.get("id"))
         if row is None:
             return
         row["failed"] = True
-        row["state"].setText("Failed")
-        row["state"].setStyleSheet(f"color: {DANGER};")
-        row["bar"].setValue(0)
+        self._set_row_state(row["bar"], "failed")
 
     def _on_log_line(self, line: str) -> None:
         """Append a log line and keep the newest line visible."""
@@ -643,29 +643,45 @@ class MainWindow(QMainWindow):
         progress_bar = QProgressBar()
         progress_bar.setObjectName("episodeBar")
         progress_bar.setRange(0, 100)
-        progress_bar.setTextVisible(False)
-
-        state_label = QLabel("Queued")
-        state_label.setObjectName("episodeState")
+        progress_bar.setValue(0)
+        progress_bar.setTextVisible(True)
+        progress_bar.setFormat("0%")
+        self._set_row_state(progress_bar, "queued")
 
         layout.addWidget(name_label, 1)
         layout.addWidget(progress_bar, 2)
-        layout.addWidget(state_label)
 
         self._rows_layout.insertWidget(self._rows_layout.count() - 1, frame)
+        # The row is freshly created with no parent; make it visible
+        # immediately so the user sees the full scope of work as soon as
+        # the downloader registers the task.
+        frame.show()
         return {
             "frame": frame,
             "bar": progress_bar,
-            "state": state_label,
             "done": False,
             "failed": False,
         }
+
+    @staticmethod
+    def _set_row_state(progress_bar: QProgressBar, state: str) -> None:
+        """Set the bar's state dynamic property and re-polish its style.
+
+        The bar's ``state`` property (``queued``, ``active``, ``done``,
+        ``failed``, ``incomplete``) is consumed by the QSS rules in
+        ``src/gui/theme.py`` to recolour the chunk. ``unpolish`` + ``polish``
+        forces Qt to re-evaluate the style so the new property takes effect
+        immediately.
+        """
+        progress_bar.setProperty("state", state)
+        progress_bar.style().unpolish(progress_bar)
+        progress_bar.style().polish(progress_bar)
 
     def _mark_incomplete_rows(self) -> None:
         """Flag every episode row that did not reach completion."""
         for row in self._episode_rows.values():
             if not row["done"] and not row["failed"]:
-                row["state"].setText("Incomplete")
+                self._set_row_state(row["bar"], "incomplete")
 
     def _build_arguments(self) -> list[str]:
         """Validate the form and build the downloader command line."""

@@ -94,7 +94,7 @@ python3 gui.py
 - Paste an anime URL and choose between **All episodes**, a **Range** (`--start`/`--end`), or a specific **Episodes** list (`--episodes 1,3,7`).
 - Select the download folder with the native OS folder picker; the choice is remembered across sessions. Files are saved in `<selected folder>/Downloads/<anime name>`, mirroring the CLI's `--custom-path` behavior.
 - Tune **Parallel downloads** (1–16, default 2) to control how many episodes download at once via `--workers`. The last value is remembered across sessions.
-- Per-episode failures surface as a distinct red **Failed** state (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get one automatic retry before being marked failed.
+- Per-episode failures surface as a red bar on the affected row (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get one automatic retry before being marked failed.
 - Live per-episode and overall progress bars, fed by the downloader's machine-readable `--progress-json` event stream.
 - A **Cancel** button stops the download at any time. Note that the episode currently being downloaded is written directly to its final name, so a partial file may remain after cancelling.
 - Errors and the downloader's stderr output are shown in a log pane.
