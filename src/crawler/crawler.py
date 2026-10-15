@@ -254,17 +254,17 @@ class Crawler:
         ]
 
     async def _get_video_url(self, embed_url: str) -> str | None:
-        """Resolve an embed URL to the page that hosts the download link.
+        """Resolve an embed URL to the vixcloud page that hosts the download link.
 
-        The embed page is itself the page that contains
-        ``<script>window.downloadUrl = '...'</script>``; ``process_video_url``
-        re-fetches that page and runs ``extract_download_link`` over its
-        script tags. So this method just needs to confirm the embed fetch
-        succeeded (no Cloudflare challenge, not a 5xx) and pass the same
-        URL through — the body itself is never used as a URL.
+        The embed endpoint responds with a small body that is itself a URL —
+        for example ``https://vixcloud.co/embed/<id>?token=...`` (about 100
+        chars). ``process_video_url`` re-fetches that page and runs
+        ``extract_download_link`` over its ``<script>`` tags to find
+        ``window.downloadUrl``.
 
-        Returns the embed URL on success, ``None`` when the embed fetch
-        failed all retries (caller drops the entry from the batch).
+        Returns the URL from the response body on success, ``None`` when
+        the embed fetch failed all retries or the body is not a URL
+        (caller drops the entry from the batch).
         """
         response = await fetch_with_retries(
             embed_url,
@@ -275,11 +275,16 @@ class Crawler:
         if response is None:
             return None
 
-        # Sanity-check the body so a Cloudflare challenge page slipping
-        # through the validator is rejected here instead of becoming a
-        # per-episode failure later. The embed page's HTML is large enough
-        # that any real response will easily exceed this size.
-        if len(response.text) < 200:
+        text = response.text.strip()
+
+        # Sanity-check: a Cloudflare challenge page slipping through the
+        # body validator would otherwise be passed to fetch_page() as a URL
+        # — producing "No connection adapters were found for '<html>...'"
+        # log spam and a per-episode failure. Accept only responses that
+        # look like a URL.
+        if not text.startswith(("http://", "https://")):
+            return None
+        if "<" in text:
             return None
 
-        return embed_url
+        return text
