@@ -151,6 +151,7 @@ async def fetch_with_retries(
     params: dict | None = None,
     httpx_retries: int = 3,
     cloudflare_retries: int = 2,
+    validate_body: bool = True,
 ) -> dict | None:
     # The retry-state machine has more arguments and early returns than the
     # project default. The branches are independent and flattening them would
@@ -165,10 +166,12 @@ async def fetch_with_retries(
       Cloudflare's JS challenge).
     - 4xx (other than 403): treated as a hard failure. The URL is wrong or the
       resource is gone — retrying only delays the inevitable.
-    - 2xx responses: validated against ``_body_looks_valid`` so a Cloudflare
-      challenge page (HTTP 200 + challenge HTML) is rejected as a transient
-      failure and retried. On the last attempt, falls through to the
-      cloudscraper path.
+    - 2xx responses: when ``validate_body`` is true, validated against
+      ``_body_looks_valid`` so a Cloudflare challenge page (HTTP 200 +
+      challenge HTML) is rejected as a transient failure and retried. On the
+      last attempt, falls through to the cloudscraper path. JSON API callers
+      (which legitimately return bodies with no HTML markers) must pass
+      ``validate_body=False``.
 
     Returns the response on success, ``None`` on permanent failure. Never
     raises — callers should treat ``None`` as "could not resolve" and surface
@@ -204,7 +207,7 @@ async def fetch_with_retries(
             if status == httpx.codes.FORBIDDEN:
                 # 403 → cloudscraper fallback (handles Cloudflare JS challenge).
                 return await _try_cloudscraper(
-                    url, headers, params, cloudflare_retries,
+                    url, headers, params, cloudflare_retries, validate_body,
                 )
 
             if status >= 500:
@@ -216,7 +219,7 @@ async def fetch_with_retries(
                     await asyncio.sleep(delay)
                     continue
                 return await _try_cloudscraper(
-                    url, headers, params, cloudflare_retries,
+                    url, headers, params, cloudflare_retries, validate_body,
                 )
 
             # 2xx (or 4xx non-403) — validate status, then body.
@@ -227,7 +230,7 @@ async def fetch_with_retries(
                 # resource is gone. Do not retry.
                 return None
 
-            if _body_looks_valid(response.text):
+            if not validate_body or _body_looks_valid(response.text):
                 return response
 
             # 2xx but body looks like a Cloudflare challenge page. Treat as
@@ -238,13 +241,13 @@ async def fetch_with_retries(
                 await asyncio.sleep(delay)
                 continue
             return await _try_cloudscraper(
-                url, headers, params, cloudflare_retries,
+                url, headers, params, cloudflare_retries, validate_body,
             )
 
         # Reached only when the httpx loop completed without a return — i.e.
         # all attempts failed with RequestError. Try cloudscraper once.
         return await _try_cloudscraper(
-            url, headers, params, cloudflare_retries,
+            url, headers, params, cloudflare_retries, validate_body,
         )
 
     return None
@@ -255,16 +258,20 @@ async def _try_cloudscraper(
     headers: dict | None,
     params: dict | None,
     retries: int,
+    validate_body: bool = True,
 ) -> dict | None:
     """Cloudscraper fallback with its own retry budget.
 
-    Returns the first response whose body passes ``_body_looks_valid``,
-    otherwise ``None``. Each attempt is followed by an exponential backoff
-    with jitter (except after the final attempt).
+    Returns the first response whose body passes ``_body_looks_valid`` (or
+    the first response, when ``validate_body`` is false), otherwise ``None``.
+    Each attempt is followed by an exponential backoff with jitter (except
+    after the final attempt).
     """
     for attempt in range(retries):
         result = await fetch_with_cloudscraper(url, headers, params)
-        if result is not None and _body_looks_valid(result.text):
+        if result is not None and (
+            not validate_body or _body_looks_valid(result.text)
+        ):
             return result
         if attempt < retries - 1:
             delay = 2 ** attempt + random.uniform(0.5, 1.5)  # noqa: S311

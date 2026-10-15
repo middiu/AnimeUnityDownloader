@@ -153,12 +153,16 @@ class Crawler:
                 "end_range": batch_end,
             }
 
-            # Perform the API request with retries and concurrency control
+            # Perform the API request with retries and concurrency control.
+            # The /info_api/{id}/0 endpoint returns JSON episode lists, not
+            # the embed page body the validator expects, so opt out of body
+            # validation for this call.
             response = await fetch_with_retries(
                 episode_api_url,
                 self.semaphore,
                 headers=HEADERS,
                 params=params,
+                validate_body=False,
             )
 
             # Extract the list of episodes from the API response
