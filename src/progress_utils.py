@@ -111,3 +111,16 @@ class CallbackProgress:
             "id": task_id,
             "message": str(message),
         })
+
+    def update_task_name(self, task_id: int, name: str) -> None:
+        """Emit a per-episode label update carrying the resolved file name.
+
+        The GUI consumes this to append ``· {name}`` to a row's label once
+        the download link has been resolved. The rich terminal path uses
+        ``create_progress_bar`` instead and does not see this event.
+        """
+        self._callback({
+            "event": "task_desc",
+            "id": task_id,
+            "desc": name,
+        })

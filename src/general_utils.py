@@ -11,6 +11,7 @@ import gzip
 import logging
 import os
 import random
+import ssl
 import sys
 import time
 
@@ -22,6 +23,7 @@ import urllib3
 from brotli import error as BrotliError  # noqa: N812
 from bs4 import BeautifulSoup
 from cloudscraper import CloudScraper
+from cloudscraper import CipherSuiteAdapter
 
 from .config import (
     DEFAULT_HEADERS,
@@ -33,6 +35,65 @@ from .config import (
 
 # Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+# Python 3.14 tightened ssl.SSLContext: the C-level guard now raises
+# ``ValueError: Cannot set verify_mode to CERT_NONE when check_hostname is
+# enabled`` (and the symmetric case) if the two settings are out of sync.
+#
+# Two layers need patching for cloudscraper on 3.14:
+#
+# 1. ``urllib3.connection._ssl_wrap_socket_and_match_hostname`` writes
+#    ``context.verify_mode = resolve_cert_reqs(cert_reqs)`` on the *incoming*
+#    context (line 937). When ``cert_reqs == CERT_NONE`` and the context
+#    still has ``check_hostname = True`` (the default from
+#    ``ssl.create_default_context``), the 3.14 C-level guard fires. Patch
+#    the function so it flips ``check_hostname = False`` *before* the
+#    ``verify_mode`` write when ``cert_reqs`` is not ``CERT_REQUIRED``.
+#
+# 2. ``cloudscraper.CipherSuiteAdapter.wrap_socket`` itself does
+#    ``self.ssl_context.check_hostname = False`` without touching
+#    ``verify_mode``. Same problem: leaves the context inconsistent for
+#    the next caller. Patch it to also set ``verify_mode = CERT_NONE``
+#    (or ``CERT_REQUIRED`` in the no-SNI branch) so the context is
+#    consistent before the underlying ``orig_wrap_socket`` runs.
+def _ssl_wrap_socket_and_match_hostname_consistent(**kwargs):  # noqa: ANN001
+    ssl_context = kwargs.get("ssl_context")
+    cert_reqs = kwargs.get("cert_reqs")
+    if ssl_context is not None and cert_reqs != ssl.CERT_REQUIRED:
+        # Setting verify_mode=CERT_NONE while check_hostname is still True
+        # is the exact 3.14 failure mode. Flip check_hostname off first.
+        ssl_context.check_hostname = False
+    return _ORIG_SSL_WRAP_SOCKET_AND_MATCH_HOSTNAME(**kwargs)
+
+
+# Accessing the leading-underscore function on urllib3.connection is the
+# whole point of the patch: we are replacing it. The other 3.14-safer
+# alternative is to fork urllib3.
+# pylint: disable=protected-access
+_ORIG_SSL_WRAP_SOCKET_AND_MATCH_HOSTNAME = (
+    urllib3.connection._ssl_wrap_socket_and_match_hostname
+)
+urllib3.connection._ssl_wrap_socket_and_match_hostname = (
+    _ssl_wrap_socket_and_match_hostname_consistent
+)
+# pylint: enable=protected-access
+
+
+def _wrap_socket_consistent_verify_mode(self, *args, **kwargs):  # noqa: ANN001
+    if hasattr(self.ssl_context, "server_hostname") and self.ssl_context.server_hostname:
+        kwargs["server_hostname"] = self.ssl_context.server_hostname
+        self.ssl_context.check_hostname = False
+        # Must follow the check_hostname flip: setting verify_mode=CERT_NONE
+        # while check_hostname is still True is the exact 3.14 failure mode.
+        self.ssl_context.verify_mode = ssl.CERT_NONE
+    else:
+        self.ssl_context.check_hostname = True
+        self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+    return self.ssl_context.orig_wrap_socket(*args, **kwargs)
+
+
+CipherSuiteAdapter.wrap_socket = _wrap_socket_consistent_verify_mode
 
 
 def add_random_delay(min_delay: float = 0.5, max_delay: float = 2.0) -> None:

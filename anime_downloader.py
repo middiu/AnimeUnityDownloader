@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import sys
 import threading
@@ -39,6 +40,15 @@ from src.progress_utils import (
     CallbackProgress,
     create_progress_bar,
     create_progress_table,
+)
+
+# Default to INFO so the diagnostic logging in process_anime_download /
+# Crawler._get_episode_ids reaches stderr (and therefore the GUI's log
+# pane). The previous default of WARNING hid every step leading to the
+# "No episodes matched your filter" message.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s",
 )
 
 
@@ -89,6 +99,7 @@ def download_episode(
 
 def process_video_url(video_url: str, download_path: str, task_info: tuple) -> None:
     """Process an embed URL to extract episode download links."""
+    job_progress, task, _overall_task = task_info
     try:
         soup = fetch_page(video_url)
     except SystemExit as exit_error:
@@ -100,6 +111,14 @@ def process_video_url(video_url: str, download_path: str, task_info: tuple) -> N
         ) from exit_error
     script_items = soup.find_all("script")
     download_link = extract_download_link(script_items, video_url)
+    if download_link and hasattr(job_progress, "update_task_name"):
+        # The GUI appends the resolved file name to the row's label. The
+        # rich terminal progress path uses ``create_progress_bar`` which
+        # does not implement ``update_task_name``; the hasattr guard keeps
+        # the terminal pipeline working without change.
+        filename = get_episode_filename(download_link)
+        if filename:
+            job_progress.update_task_name(task, filename)
     download_episode(download_link, download_path, task_info)
 
 
@@ -148,12 +167,20 @@ async def process_anime_download(
     max_workers: int | None = None,
 ) -> None:
     """Process the download of an anime from the specified URL."""
+    logging.info(
+        "process_anime_download: url=%s start=%s end=%s episodes=%s",
+        url, start_episode, end_episode, episodes,
+    )
     soup = fetch_page_httpx(url)
     crawler = Crawler(
         url=url,
         start_episode=start_episode,
         end_episode=end_episode,
         episodes=episodes,
+    )
+    logging.info(
+        "crawler constructed: api_url=%s num_episodes=%s",
+        crawler.api_url, crawler.num_episodes,
     )
     anime_name = crawler.extract_anime_name(soup, url)
     download_path = create_download_directory(anime_name, custom_path=custom_path)
