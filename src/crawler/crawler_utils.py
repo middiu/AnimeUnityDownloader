@@ -280,11 +280,14 @@ async def _try_cloudscraper(
 
 
 # Positive markers that indicate a real embed/player page. If any of these
-# show up in the body, it's likely a legitimate response.
+# show up in the body, it's likely a legitimate response. AnimeUnity's
+# ``/embed-url/{id}`` endpoint now returns just the vixcloud URL as plain
+# text (not wrapped in an iframe), so the bare host also counts as valid.
 _BODY_VALID_MARKERS = (
     "<iframe",
     'src="https://vixcloud.co/',
     "player",
+    "vixcloud.co/embed/",
 )
 
 # Negative markers that explicitly identify a Cloudflare challenge page. If
