@@ -94,7 +94,7 @@ python3 gui.py
 - Paste an anime URL and choose between **All episodes**, a **Range** (`--start`/`--end`), or a specific **Episodes** list (`--episodes 1,3,7`).
 - Select the download folder with the native OS folder picker; the choice is remembered across sessions. Files are saved in `<selected folder>/Downloads/<anime name>`, mirroring the CLI's `--custom-path` behavior.
 - Tune **Parallel downloads** (1–16, default 2) to control how many episodes download at once via `--workers`. The last value is remembered across sessions.
-- Per-episode failures surface as a red bar on the affected row (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get one automatic retry before being marked failed.
+- Per-episode failures surface as a red bar on the affected row (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get up to 3 automatic retry passes (4 total attempts) before being marked failed.
 - Live per-episode and overall progress bars, fed by the downloader's machine-readable `--progress-json` event stream.
 - A **Cancel** button stops the download at any time. Note that the episode currently being downloaded is written directly to its final name, so a partial file may remain after cancelling.
 - Errors and the downloader's stderr output are shown in a log pane.
@@ -155,6 +155,17 @@ To cap the number of episodes downloaded at the same time (defaults to 2), pass 
 ```bash
 python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --workers 4
 ```
+
+### Retry Behaviour
+
+The embed-page fetcher (`fetch_with_retries`) retries on transient errors automatically:
+
+- **5xx** (Cloudflare origin protection, etc.): up to 3 httpx attempts with exponential backoff and jitter, then a `cloudscraper` fallback.
+- **403**: jumps straight to the `cloudscraper` fallback (handles Cloudflare's JS challenge).
+- **2xx with a Cloudflare challenge body**: rejected by the body validator and retried through the same path.
+- **4xx (other than 403)**: hard failure — the URL is wrong or the resource is gone.
+
+If a single episode fails end-to-end (URL resolution + download), `run_in_parallel` retries it up to **3 extra passes** (4 total attempts) before marking the row failed.
 
 ## Batch Download
 

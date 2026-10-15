@@ -204,7 +204,15 @@ class Crawler:
             headers=HEADERS,
         )
 
-        if response:
-            return response.text.strip()
+        if response is None:
+            return None
 
-        return None
+        # Defensive: a Cloudflare challenge page slipping through validation
+        # would otherwise be passed to fetch_page() as a URL — producing
+        # "No connection adapters were found for '<html>...'" log spam and a
+        # per-episode failure. Reject anything that does not look like a URL.
+        text = response.text.strip()
+        if not text.startswith(("http://", "https://")) or "<" in text:
+            return None
+
+        return text

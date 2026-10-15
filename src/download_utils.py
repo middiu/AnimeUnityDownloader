@@ -33,9 +33,11 @@ READ_TIMEOUT = 30
 CHUNK_STALL_SECONDS = 30
 
 # How many extra passes ``run_in_parallel`` makes for URLs that raised on the
-# first attempt. One retry pass is the default; raise the constant to retry
-# more times, or pass ``max_retry_passes=0`` to disable retries.
-MAX_RETRY_PASSES = 1
+# first attempt. Three retry passes (four total attempts) gives a typical
+# Cloudflare origin-protection 503 burst (~2-3 minutes) time to clear before
+# the row is permanently marked failed. Pass ``max_retry_passes=0`` to
+# disable retries entirely.
+MAX_RETRY_PASSES = 3
 
 
 class DownloadFailed(Exception):

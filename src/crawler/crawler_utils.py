@@ -21,7 +21,6 @@ import requests
 from src.config import (
     BASE_HEADERS,
     DOWNLOAD_LINK_PATTERN,
-    HTTP_STATUS_FORBIDDEN,
     prepare_headers,
 )
 from src.general_utils import prepare_cloudscraper_session
@@ -150,21 +149,31 @@ async def fetch_with_retries(
     semaphore: Semaphore,
     headers: dict | None = None,
     params: dict | None = None,
-    retries: int = 4,
+    httpx_retries: int = 3,
+    cloudflare_retries: int = 2,
 ) -> dict | None:
-    """Fetch data from a URL with retries on failure."""
+    # The retry-state machine has more arguments and early returns than the
+    # project default. The branches are independent and flattening them would
+    # obscure the control flow more than the metrics flag suggests.
+    # pylint: disable=too-many-arguments,too-many-positional-arguments,too-many-return-statements
+    """Fetch a URL with httpx + cloudscraper fallback.
 
-    async def retry_or_fallback(
-        attempt: int,
-        min_delay: float = 0.0,
-        max_delay: float = 2.0,
-    ) -> dict | None:
-        if attempt < retries - 1:
-            delay = 2 ** attempt + random.uniform(min_delay, max_delay)  # noqa: S311
-            await asyncio.sleep(delay)
+    - 5xx responses: exponential backoff with jitter, up to ``httpx_retries``
+      attempts, then a cloudscraper fallback (in case the edge is throwing
+      challenges while the origin is up).
+    - 403 responses: jump straight to the cloudscraper fallback (which solves
+      Cloudflare's JS challenge).
+    - 4xx (other than 403): treated as a hard failure. The URL is wrong or the
+      resource is gone — retrying only delays the inevitable.
+    - 2xx responses: validated against ``_body_looks_valid`` so a Cloudflare
+      challenge page (HTTP 200 + challenge HTML) is rejected as a transient
+      failure and retried. On the last attempt, falls through to the
+      cloudscraper path.
 
-        return await fetch_with_cloudscraper(url, headers, params)
-
+    Returns the response on success, ``None`` on permanent failure. Never
+    raises — callers should treat ``None`` as "could not resolve" and surface
+    it as a per-episode error.
+    """
     # Use better headers if none provided
     if headers is None:
         headers = prepare_headers()
@@ -177,25 +186,124 @@ async def fetch_with_retries(
         follow_redirects=True,
         verify=False,  # noqa: S501
     ) as client:
-        for attempt in range(retries):
+        for attempt in range(httpx_retries):
             try:
                 response = await client.get(url, params=params)
-                response.raise_for_status()
-
-            except httpx.HTTPStatusError as https_err:
-                if https_err.response.status_code == HTTP_STATUS_FORBIDDEN:
-                    await retry_or_fallback(attempt, min_delay=1.0, max_delay=3.0)
-
-                elif attempt < retries - 1:
-                    delay = 2 ** attempt + random.uniform(1, 2)  # noqa: S311
-                    await asyncio.sleep(delay)
 
             except httpx.RequestError:
-                await retry_or_fallback(attempt)
+                # Connection error / DNS / timeout. Retry with backoff; the
+                # last attempt falls through to the cloudscraper path below.
+                if attempt < httpx_retries - 1:
+                    delay = 2 ** attempt + random.uniform(0.5, 1.5)  # noqa: S311
+                    await asyncio.sleep(delay)
+                    continue
+                break
 
-            return response
+            status = response.status_code
+
+            if status == httpx.codes.FORBIDDEN:
+                # 403 → cloudscraper fallback (handles Cloudflare JS challenge).
+                return await _try_cloudscraper(
+                    url, headers, params, cloudflare_retries,
+                )
+
+            if status >= 500:
+                # 5xx → backoff and retry; on the last attempt, give
+                # cloudscraper one shot in case the origin is up but the edge
+                # is throwing challenges.
+                if attempt < httpx_retries - 1:
+                    delay = 2 ** attempt + random.uniform(1, 2)  # noqa: S311
+                    await asyncio.sleep(delay)
+                    continue
+                return await _try_cloudscraper(
+                    url, headers, params, cloudflare_retries,
+                )
+
+            # 2xx (or 4xx non-403) — validate status, then body.
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError:
+                # 4xx other than 403. Hard failure; the URL is wrong or the
+                # resource is gone. Do not retry.
+                return None
+
+            if _body_looks_valid(response.text):
+                return response
+
+            # 2xx but body looks like a Cloudflare challenge page. Treat as
+            # a transient failure and retry; on the last attempt, give
+            # cloudscraper a chance.
+            if attempt < httpx_retries - 1:
+                delay = 2 ** attempt + random.uniform(1, 2)  # noqa: S311
+                await asyncio.sleep(delay)
+                continue
+            return await _try_cloudscraper(
+                url, headers, params, cloudflare_retries,
+            )
+
+        # Reached only when the httpx loop completed without a return — i.e.
+        # all attempts failed with RequestError. Try cloudscraper once.
+        return await _try_cloudscraper(
+            url, headers, params, cloudflare_retries,
+        )
 
     return None
+
+
+async def _try_cloudscraper(
+    url: str,
+    headers: dict | None,
+    params: dict | None,
+    retries: int,
+) -> dict | None:
+    """Cloudscraper fallback with its own retry budget.
+
+    Returns the first response whose body passes ``_body_looks_valid``,
+    otherwise ``None``. Each attempt is followed by an exponential backoff
+    with jitter (except after the final attempt).
+    """
+    for attempt in range(retries):
+        result = await fetch_with_cloudscraper(url, headers, params)
+        if result is not None and _body_looks_valid(result.text):
+            return result
+        if attempt < retries - 1:
+            delay = 2 ** attempt + random.uniform(0.5, 1.5)  # noqa: S311
+            await asyncio.sleep(delay)
+    return None
+
+
+# Positive markers that indicate a real embed/player page. If any of these
+# show up in the body, it's likely a legitimate response.
+_BODY_VALID_MARKERS = (
+    "<iframe",
+    'src="https://vixcloud.co/',
+    "player",
+)
+
+# Negative markers that explicitly identify a Cloudflare challenge page. If
+# any of these show up, the body is rejected regardless of positive markers.
+_BODY_INVALID_MARKERS = (
+    "cf-chl-bypass",
+    "challenge-platform",
+    "cf-mitigated",
+)
+
+
+def _body_looks_valid(body: str) -> bool:
+    """Return True if the body looks like a real embed page, not a challenge.
+
+    A response is invalid if it is empty or contains any of the explicit
+    Cloudflare challenge markers. Otherwise it is valid if it contains at
+    least one of the positive embed/player markers. The negative check is
+    sharp on purpose so a future embed-page redesign that drops one of the
+    positive markers does not silently accept a challenge page.
+    """
+    if not body:
+        return False
+    lowered = body.lower()
+    if any(marker in lowered for marker in _BODY_INVALID_MARKERS):
+        return False
+    return any(marker in lowered for marker in _BODY_VALID_MARKERS)
 
 
 def extract_download_link(script_items: list, video_url: str) -> str | None:
