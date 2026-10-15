@@ -11,6 +11,7 @@ import gzip
 import logging
 import os
 import random
+import ssl
 import sys
 import time
 
@@ -22,6 +23,7 @@ import urllib3
 from brotli import error as BrotliError  # noqa: N812
 from bs4 import BeautifulSoup
 from cloudscraper import CloudScraper
+from cloudscraper import CipherSuiteAdapter
 
 from .config import (
     DEFAULT_HEADERS,
@@ -33,6 +35,31 @@ from .config import (
 
 # Suppress SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+# Python 3.14 tightened ssl.SSLContext: the C-level guard now raises
+# ``ValueError: Cannot set verify_mode to CERT_NONE when check_hostname is
+# enabled`` (and the symmetric case) if the two settings are out of sync.
+# cloudscraper's ``CipherSuiteAdapter.wrap_socket`` flips ``check_hostname``
+# without touching ``verify_mode`` (see cloudscraper/__init__.py), leaving
+# the context in an internally-inconsistent state on 3.14: every subsequent
+# call that touches ``verify_mode`` then crashes. Patch the adapter to
+# also set ``verify_mode = CERT_NONE`` after ``check_hostname = False`` so
+# the context is consistent before the underlying ``orig_wrap_socket`` runs.
+def _wrap_socket_consistent_verify_mode(self, *args, **kwargs):  # noqa: ANN001
+    if hasattr(self.ssl_context, "server_hostname") and self.ssl_context.server_hostname:
+        kwargs["server_hostname"] = self.ssl_context.server_hostname
+        self.ssl_context.check_hostname = False
+        # Must follow the check_hostname flip: setting verify_mode=CERT_NONE
+        # while check_hostname is still True is the exact 3.14 failure mode.
+        self.ssl_context.verify_mode = ssl.CERT_NONE
+    else:
+        self.ssl_context.check_hostname = True
+        self.ssl_context.verify_mode = ssl.CERT_REQUIRED
+    return self.ssl_context.orig_wrap_socket(*args, **kwargs)
+
+
+CipherSuiteAdapter.wrap_socket = _wrap_socket_consistent_verify_mode
 
 
 def add_random_delay(min_delay: float = 0.5, max_delay: float = 2.0) -> None:
