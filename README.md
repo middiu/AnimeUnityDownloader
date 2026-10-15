@@ -95,6 +95,7 @@ python3 gui.py
 - Select the download folder with the native OS folder picker; the choice is remembered across sessions. Files are saved in `<selected folder>/Downloads/<anime name>`, mirroring the CLI's `--custom-path` behavior.
 - Tune **Parallel downloads** (1–16, default 2) to control how many episodes download at once via `--workers`. The last value is remembered across sessions.
 - Per-episode failures surface as a red bar on the affected row (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get up to 3 automatic retry passes (4 total attempts) before being marked failed.
+- Each row's label starts as `Episode N/M` and is updated to `Episode N/M · filename` once the download link has been resolved, so the file under download is identifiable at a glance.
 - Live per-episode and overall progress bars, fed by the downloader's machine-readable `--progress-json` event stream.
 - A **Cancel** button stops the download at any time. Note that the episode currently being downloaded is written directly to its final name, so a partial file may remain after cancelling.
 - Errors and the downloader's stderr output are shown in a log pane.

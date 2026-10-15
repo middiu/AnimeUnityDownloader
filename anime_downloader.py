@@ -89,6 +89,7 @@ def download_episode(
 
 def process_video_url(video_url: str, download_path: str, task_info: tuple) -> None:
     """Process an embed URL to extract episode download links."""
+    job_progress, task, _overall_task = task_info
     try:
         soup = fetch_page(video_url)
     except SystemExit as exit_error:
@@ -100,6 +101,14 @@ def process_video_url(video_url: str, download_path: str, task_info: tuple) -> N
         ) from exit_error
     script_items = soup.find_all("script")
     download_link = extract_download_link(script_items, video_url)
+    if download_link and hasattr(job_progress, "update_task_name"):
+        # The GUI appends the resolved file name to the row's label. The
+        # rich terminal progress path uses ``create_progress_bar`` which
+        # does not implement ``update_task_name``; the hasattr guard keeps
+        # the terminal pipeline working without change.
+        filename = get_episode_filename(download_link)
+        if filename:
+            job_progress.update_task_name(task, filename)
     download_episode(download_link, download_path, task_info)
 
 

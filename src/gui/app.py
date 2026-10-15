@@ -481,6 +481,8 @@ class MainWindow(QMainWindow):
             self._set_status(f"Error: {self._last_error}", "error")
         elif kind == "fail":
             self._on_fail_event(event)
+        elif kind == "task_desc":
+            self._on_task_desc_event(event)
 
     def _on_task_event(self, event: dict) -> None:
         """Register the overall task or create a row for an episode task."""
@@ -531,6 +533,22 @@ class MainWindow(QMainWindow):
             return
         row["failed"] = True
         self._set_row_state(row["bar"], "failed")
+
+    def _on_task_desc_event(self, event: dict) -> None:
+        """Update a row's label with the resolved file name suffix.
+
+        The label keeps the original counter (e.g. ``Episode 3/100``) and
+        appends ``· {filename}`` once the file name is known. The suffix
+        is permanent for the row's lifetime — state transitions recolour
+        the bar but do not touch the label.
+        """
+        row = self._episode_rows.get(event.get("id"))
+        if row is None:
+            return
+        filename = str(event.get("desc", "")).strip()
+        if not filename:
+            return
+        row["name_label"].setText(f"{row['counter']} · {filename}")
 
     def _on_log_line(self, line: str) -> None:
         """Append a log line and keep the newest line visible."""
@@ -659,6 +677,8 @@ class MainWindow(QMainWindow):
         return {
             "frame": frame,
             "bar": progress_bar,
+            "name_label": name_label,
+            "counter": description,
             "done": False,
             "failed": False,
         }
