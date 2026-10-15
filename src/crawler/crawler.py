@@ -68,11 +68,19 @@ class Crawler:
         self.semaphore = asyncio.Semaphore(CRAWLER_WORKERS)
 
     async def collect_video_urls(self) -> list[str]:
-        """Collect a list of video URLs by concurrently fetching each embed URL."""
+        """Collect a list of video URLs by concurrently fetching each embed URL.
+
+        Episodes whose embed body could not be resolved are silently dropped
+        from the result. The downstream pipeline is driven by URL counts
+        (episode N/M labels, progress totals), and a None in the list would
+        surface later as ``fetch_page(None)`` and "No scheme supplied" log
+        spam. Better to skip the bad row up front.
+        """
         episode_ids = await self._collect_episode_ids()
         embed_urls = self._generate_episode_embed_urls(episode_ids)
         tasks = [self._get_video_url(embed_url) for embed_url in embed_urls]
-        return await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks)
+        return [url for url in results if url is not None]
 
     # Static methods
     @staticmethod
