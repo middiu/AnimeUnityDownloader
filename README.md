@@ -4,6 +4,14 @@
 
 ![Demo](https://github.com/Lysagxra/AnimeUnityDownloader/blob/8e274bdfb71f8fc714fa02322ec2b3eda61cce53/assets/demo.png)
 
+## About this fork
+
+This repository is a fork of [Lysagxra/AnimeUnityDownloader](https://github.com/Lysagxra/AnimeUnityDownloader). The core downloader, the crawler, the retry logic, and the rich-terminal progress path are **the work of [Lysagxra](https://github.com/Lysagxra)** — all credit for those goes to the original author.
+
+The changes in this fork focus on the **desktop GUI** (a PySide6 wrapper around the same `anime_downloader.py` subprocess) and on keeping the embed/Cloudflare pipeline working as AnimeUnity's site evolves. See [Fork changes](#fork-changes) for the full list.
+
+If you only need the command-line tool, the upstream README at [Lysagxra/AnimeUnityDownloader](https://github.com/Lysagxra/AnimeUnityDownloader) is authoritative.
+
 ## Features
 
 - Downloads multiple episodes concurrently.
@@ -53,10 +61,12 @@ project-root/
 
 ## Installation
 
-1. Clone the repository:
+1. Clone this fork (or the upstream — the CLI works identically):
 
 ```bash
-git clone https://github.com/Lysagxra/AnimeUnityDownloader.git
+git clone https://github.com/middiu/AnimeUnityDownloader.git
+# or:
+# git clone https://github.com/Lysagxra/AnimeUnityDownloader.git
 ```
 
 2. Navigate to the project directory:
@@ -96,6 +106,8 @@ python3 gui.py
 - Tune **Parallel downloads** (1–16, default 2) to control how many episodes download at once via `--workers`. The last value is remembered across sessions.
 - Per-episode failures surface as a red bar on the affected row (so cancelled runs and downloader failures are no longer indistinguishable), and failed URLs get up to 3 automatic retry passes (4 total attempts) before being marked failed.
 - Each row's label starts as `Episode N/M` and is updated to `Episode N/M · filename` once the download link has been resolved, so the file under download is identifiable at a glance.
+- Episode rows are always displayed in episode order (smallest task id on top) even if the `task` events arrive out of order.
+- A small **Clear** button in the log card header wipes the log pane and the per-episode progress list in one click. It is disabled while a download is running so in-flight progress cannot be wiped accidentally.
 - Live per-episode and overall progress bars, fed by the downloader's machine-readable `--progress-json` event stream.
 - A **Cancel** button stops the download at any time. Note that the episode currently being downloaded is written directly to its final name, so a partial file may remain after cancelling.
 - Errors and the downloader's stderr output are shown in a log pane.
@@ -206,3 +218,29 @@ python3 main.py --custom-path <custom_path>
 ```bash
 python3 main.py --custom-path /path/to/external/drive
 ```
+
+## Fork changes
+
+Everything below diverges from [Lysagxra/AnimeUnityDownloader](https://github.com/Lysagxra/AnimeUnityDownloader). The CLI behaviour, the embed-page extractor, the retry/backoff logic, the rich progress bar, the URL/episode parsing, and the directory layout are upstream work — they have been kept intact and any bug fixes there have been sent (or will be sent) back upstream where they fit. Items marked **GUI** are new in this fork and only affect the PySide6 desktop interface.
+
+### GUI features added in this fork
+
+- **Per-row filename suffix** (v1.6.0). Each row's label starts as `Episode N/M` and is updated to `Episode N/M · filename` once the download link has been resolved, so the file under download is identifiable at a glance.
+- **Sort by episode index** (v1.6.2). The progress list is always displayed in episode order — smallest task id on top — even if the `task` events arrive out of order.
+- **Clear button** (v1.6.2). A small **Clear** button in the log card header wipes the log pane and the per-episode progress list in one click. It is disabled while a download is running so in-flight progress cannot be wiped accidentally.
+
+### Embed/Cloudflare pipeline fixes (apply to both CLI and GUI)
+
+- **`fetch_with_retries` body validator** (v1.5.0). A `validate_body` parameter was added so the JSON `/info_api/{id}/0` calls are not rejected by the embed-body validator, and so Cloudflare challenge pages (HTTP 200 + challenge HTML) are retried instead of being treated as success.
+- **Bare vixcloud URL in the embed response** (v1.6.1). AnimeUnity's `/embed-url/{id}` endpoint now returns just the `vixcloud.co/embed/...` URL as plain text rather than wrapping it in an iframe. The endpoint accepts the bare URL, and the validator's positive-marker list recognises it.
+- **`collect_video_urls` filters `None` results up front** (v1.6.0). The downstream pipeline is driven by URL counts (episode N/M labels, progress totals), so dropping unresolved embeds at the producer side avoids `fetch_page(None)` / "No scheme supplied" log spam and makes the per-episode task ids line up with the visible rows.
+
+### Fork-specific cleanup
+
+- The new GUI's worker signals and theme QSS live under `src/gui/` alongside the existing modules; nothing in `src/crawler/`, `src/download_utils.py`, `anime_downloader.py`, or `main.py` is reshaped for the GUI. The CLI and the GUI are still the same downloader — only the surface changed.
+- Diagnostic `logging.info` calls were added in the crawler and `process_anime_download` during the v1.5.0/v1.6.0 debugging. They are low-volume and stay at `INFO` level so a user can run with `python3 anime_downloader.py …` and see what each batch is doing. Suppress by removing the `logging.basicConfig(level=logging.INFO, …)` call in `anime_downloader.py`.
+
+## Credits
+
+- Upstream project: [Lysagxra/AnimeUnityDownloader](https://github.com/Lysagxra/AnimeUnityDownloader) by [Lysagxra](https://github.com/Lysagxra). All downloader logic, retry behaviour, embed-page parsing, the rich progress display, and the batch/CLI scripts come from there. If you use this fork, please star the original.
+- Fork maintainer: [middiu](https://github.com/middiu). The GUI-only additions and the embed-pipeline compatibility fixes listed under [Fork changes](#fork-changes) above.
