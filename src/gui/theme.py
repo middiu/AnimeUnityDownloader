@@ -155,6 +155,24 @@ QPushButton#cancelButton:disabled {{
     color: {MUTED};
     border-color: {INPUT_BORDER};
 }}
+QPushButton#clearButton {{
+    background-color: transparent;
+    color: {MUTED};
+    border: 1px solid {INPUT_BORDER};
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    min-height: 14px;
+}}
+QPushButton#clearButton:hover {{
+    color: {TEXT};
+    border-color: {MUTED};
+}}
+QPushButton#clearButton:disabled {{
+    color: {MUTED};
+    border-color: {INPUT_BORDER};
+}}
 
 /* ---------- Segmented mode buttons ---------- */
 QToolButton#segButton {{

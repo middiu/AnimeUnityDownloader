@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
         return card
 
     def _build_log_card(self) -> QFrame:
-        """Build the card with the read-only log pane."""
+        """Build the card with the read-only log pane and a clear button."""
         card = QFrame()
         card.setObjectName("card")
         card.setSizePolicy(
@@ -385,12 +385,31 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(18, 12, 18, 12)
         layout.setSpacing(6)
 
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(8)
+        header_row.addWidget(self._make_field_label("Log"))
+        header_row.addStretch()
+
+        # The clear button wipes both the log pane and the per-episode
+        # progress rows. Disabled while a download is running so the user
+        # cannot accidentally wipe in-flight progress; re-enabled by
+        # ``_set_running`` once the worker stops.
+        self._clear_button = QPushButton("Clear")
+        self._clear_button.setObjectName("clearButton")
+        self._clear_button.setEnabled(False)
+        self._clear_button.setToolTip(
+            "Clear the log panel and the per-episode progress list.",
+        )
+        self._clear_button.clicked.connect(self._on_clear_clicked)
+        header_row.addWidget(self._clear_button)
+
         self._log_pane = QPlainTextEdit()
         self._log_pane.setObjectName("logPane")
         self._log_pane.setReadOnly(True)
         self._log_pane.setMaximumHeight(130)
 
-        layout.addWidget(self._make_field_label("Log"))
+        layout.addLayout(header_row)
         layout.addWidget(self._log_pane)
         return card
 
@@ -460,6 +479,17 @@ class MainWindow(QMainWindow):
         self._set_status("Cancelling…", "running")
         self._worker.cancel()
 
+    def _on_clear_clicked(self) -> None:
+        """Wipe the log pane and the per-episode progress rows.
+
+        The button is disabled while the worker is running, so by the time
+        this slot fires the download is either done, cancelled, or has
+        errored out — none of which require the user to keep the previous
+        run's rows in view.
+        """
+        self._reset_results()
+        self._set_status("Ready.", "idle")
+
     def _on_event(self, event: dict) -> None:
         """React to a single progress event from the downloader."""
         kind = event.get("event")
@@ -496,8 +526,12 @@ class MainWindow(QMainWindow):
             self._overall_bar.setValue(0)
             return
 
-        row = self._create_episode_row(description)
+        row = self._create_episode_row(description, task_id)
         self._episode_rows[task_id] = row
+        # Sort defensively: the worker emits ``task`` events in order, but
+        # out-of-order arrivals (e.g. an update thread firing late) would
+        # otherwise leave a row at the bottom that belongs on top.
+        self._sort_rows_by_task_id()
 
     def _on_update_event(self, event: dict) -> None:
         """Apply a progress update to its episode row."""
@@ -609,6 +643,10 @@ class MainWindow(QMainWindow):
         """Toggle the interface between the running and idle states."""
         self._start_button.setEnabled(not running)
         self._cancel_button.setEnabled(running)
+        # The clear button is the inverse of the start button: enabled
+        # only when no download is in flight, so the user cannot wipe
+        # rows/logs out from under a running worker.
+        self._clear_button.setEnabled(not running)
 
         widgets = (
             self._url_edit,
@@ -638,19 +676,39 @@ class MainWindow(QMainWindow):
         self._overall_bar.setRange(0, 1)
         self._overall_bar.setValue(0)
 
-        while self._rows_layout.count():
-            item = self._rows_layout.takeAt(0)
+        # Snapshot the row widgets first, then remove them from the
+        # layout by widget reference. Iterating ``layout.takeAt(i)``
+        # while modifying the layout is unreliable when the only
+        # child left is a non-widget item (the trailing stretch).
+        row_widgets: list[QWidget] = []
+        for index in range(self._rows_layout.count()):
+            item = self._rows_layout.itemAt(index)
+            if item is None:
+                continue
             widget = item.widget()
             if widget is not None:
-                widget.deleteLater()
+                row_widgets.append(widget)
+
+        for widget in row_widgets:
+            self._rows_layout.removeWidget(widget)
+            widget.deleteLater()
 
         self._episode_rows.clear()
         self._log_pane.clear()
 
-    def _create_episode_row(self, description: str) -> dict:
-        """Create one progress row for an episode and add it to the list."""
+    def _create_episode_row(
+        self, description: str, task_id: int,
+    ) -> dict:
+        """Create one progress row for an episode and add it to the list.
+
+        ``task_id`` is stored on the row so ``_sort_rows_by_task_id`` can
+        reorder the visible rows into episode order even if the
+        ``task`` events arrive out of order (e.g. retry-pass visibility
+        changes interleaved with new rows).
+        """
         frame = QFrame()
         frame.setObjectName("episodeRow")
+        frame.setProperty("taskId", task_id)
         layout = QHBoxLayout(frame)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
@@ -669,6 +727,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(name_label, 1)
         layout.addWidget(progress_bar, 2)
 
+        # Insert before the trailing stretch so the row is visible.
         self._rows_layout.insertWidget(self._rows_layout.count() - 1, frame)
         # The row is freshly created with no parent; make it visible
         # immediately so the user sees the full scope of work as soon as
@@ -679,9 +738,45 @@ class MainWindow(QMainWindow):
             "bar": progress_bar,
             "name_label": name_label,
             "counter": description,
+            "task_id": task_id,
             "done": False,
             "failed": False,
         }
+
+    def _sort_rows_by_task_id(self) -> None:
+        """Reorder the visible rows so the smallest task id is on top.
+
+        The QVBoxLayout's child order determines display order; we
+        temporarily remove the trailing stretch, re-insert frames in
+        ``task_id`` order, then put the stretch back. Defensive against
+        a layout that does not yet have a stretch (should not happen in
+        practice — ``_build_results_card`` installs one at construction).
+        """
+        if self._rows_layout.count() == 0:
+            return
+
+        last_index = self._rows_layout.count() - 1
+        last_item = self._rows_layout.itemAt(last_index)
+        stretch = (
+            self._rows_layout.takeAt(last_index)
+            if last_item is not None and last_item.widget() is None
+            else None
+        )
+
+        frames: list[tuple[int, QFrame]] = []
+        while self._rows_layout.count() > 0:
+            item = self._rows_layout.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is None:
+                continue
+            frames.append((int(widget.property("taskId")), widget))
+
+        frames.sort(key=lambda pair: pair[0])
+        for _task_id, frame in frames:
+            self._rows_layout.addWidget(frame)
+
+        if stretch is not None:
+            self._rows_layout.addItem(stretch)
 
     @staticmethod
     def _set_row_state(progress_bar: QProgressBar, state: str) -> None:
