@@ -130,35 +130,37 @@ python3 anime_downloader.py <anime_url> [--start <start_episode>] [--end <end_ep
 - `--episodes <episode_list>`: Comma or space separated list of specific episode numbers to download.
 - `--workers <count>`: Maximum number of episodes downloaded in parallel (default: 2).
 
+The host in `<anime_url>` is used as-is. Derived requests (the series info API and embed URLs) stay on that same origin. The tool does not assume a site domain, so a domain change only requires pasting the new page address.
+
 ### Examples
 
 To download all episodes:
 ```bash
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri
 ```
 
 To download a specific range of episodes (e.g., episodes 5 to 10):
 ```bash
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --start 5 --end 10
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri --start 5 --end 10
 ```
 
 To download episodes starting from a specific episode:
 ```bash
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --start 5
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri --start 5
 ```
 In this case, the script will download all episodes starting from the `--start` episode to the last episode.
 
 To download episodes up to a certain episode:
 ```bash
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --end 10
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri --end 10
 ```
 In this case, the script will download all episodes starting from the first episode to the `--end` episode.
 
 To download only specific episodes (e.g., episodes 3, 7, 12, and 15) add the `--episodes` flag and the list of episodes separated by comma or space or both
 
 ```bash
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --episodes 3,7,12,15
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --episodes 3 7 12 15
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri --episodes 3,7,12,15
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri --episodes 3 7 12 15
 ```
 
 This is useful when you already have some episodes and only need to download the missing ones, avoiding re-downloading an entire range.
@@ -166,7 +168,7 @@ This is useful when you already have some episodes and only need to download the
 To cap the number of episodes downloaded at the same time (defaults to 2), pass `--workers`:
 
 ```bash
-python3 anime_downloader.py https://www.animeunity.so/anime/1517-yuru-yuri --workers 4
+python3 anime_downloader.py https://example.invalid/anime/1517-yuru-yuri --workers 4
 ```
 
 ### Retry Behaviour
@@ -189,9 +191,9 @@ If a single episode fails end-to-end (URL resolution + download), `run_in_parall
 - Example of `URLs.txt`:
 
 ```
-https://www.animeunity.so/anime/1517-yuru-yuri
-https://www.animeunity.so/anime/3871-chainsaw-man
-https://www.animeunity.so/anime/2598-made-in-abyss
+https://example.invalid/anime/1517-yuru-yuri
+https://example.invalid/anime/3871-chainsaw-man
+https://example.invalid/anime/2598-made-in-abyss
 ```
 
 - Ensure that each URL is on its own line without any extra spaces.

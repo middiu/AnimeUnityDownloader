@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
 
         self._url_edit = QLineEdit()
         self._url_edit.setObjectName("urlEdit")
-        self._url_edit.setPlaceholderText("https://www.animeunity.so/anime/…")
+        self._url_edit.setPlaceholderText("https://host/anime/123-title")
         self._url_edit.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed,
         )

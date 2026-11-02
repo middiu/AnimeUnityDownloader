@@ -21,12 +21,12 @@ from src.config import (
 )
 
 from .crawler_utils import (
+    build_embed_url,
+    build_info_api_url,
     episode_in_range,
-    extract_host_domain,
     extract_name_from_title_tag,
     fetch_with_retries,
     validate_episode_range,
-    validate_url,
 )
 
 if TYPE_CHECKING:
@@ -59,7 +59,8 @@ class Crawler:
         episodes: list[int] | None = None,
     ) -> None:
         """Initialize the crawler."""
-        self.host_domain = extract_host_domain(url)
+        # Kept so later requests can rebuild URLs from the page the user pasted.
+        self.page_url = url
         self.api_url = self._generate_api_url(url)
         self.num_episodes = self._get_num_episodes()
         self.start_episode = start_episode
@@ -136,20 +137,11 @@ class Crawler:
         return response_json["episodes_count"]
 
     def _generate_api_url(self, url: str) -> str | None:
-        """Generate the API URL based on the provided base URL."""
-        validated_url = validate_url(url)
-        escaped_host_domain = re.escape(self.host_domain)
-        match = re.match(
-            rf"https://{escaped_host_domain}/anime/(\d+-[^/]+)",
-            validated_url,
-        )
-
-        if match:
-            anime_id = match.group(1)
-            return f"https://{self.host_domain}/info_api/{anime_id}"
-
-        logging.error("URL format is incorrect.")
-        return None
+        """Generate the API URL on the same origin as the user-supplied page."""
+        api_url = build_info_api_url(url)
+        if api_url is None:
+            logging.error("URL format is incorrect.")
+        return api_url
 
     async def _get_episode_ids(self) -> list[tuple[int, str]] | None:
         """Fetch the IDs of all the episodes from an API."""
@@ -247,11 +239,13 @@ class Crawler:
         ]
 
     def _generate_episode_embed_urls(self, episode_ids: str) -> list[str]:
-        """Generate a list of embed URLs for a series of episodes."""
-        return [
-            f"https://{self.host_domain}/embed-url/{episode_id}"
-            for episode_id in episode_ids
-        ]
+        """Generate embed URLs on the same origin as the user-supplied page."""
+        embed_urls = []
+        for episode_id in episode_ids:
+            embed_url = build_embed_url(self.page_url, episode_id)
+            if embed_url is not None:
+                embed_urls.append(embed_url)
+        return embed_urls
 
     async def _get_video_url(self, embed_url: str) -> str | None:
         """Resolve an embed URL to the vixcloud page that hosts the download link.
