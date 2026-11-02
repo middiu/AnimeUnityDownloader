@@ -63,6 +63,65 @@ def extract_host_domain(url: str) -> str:
     return parsed_url.netloc
 
 
+# Anime page paths look like ``/anime/<id>-<slug>``. The id-slug is taken from
+# the user URL's path only, so a query string cannot leak into derived URLs.
+_ANIME_SLUG_PATTERN = re.compile(r"/anime/(\d+-[^/]+)")
+
+
+def extract_origin(url: str) -> str | None:
+    """Return ``scheme://authority`` parsed from a user-supplied page URL.
+
+    The authority is whatever host (and port or userinfo) the user pasted.
+    Callers must not substitute a fixed download-site host.
+    """
+    if not url or not url.strip():
+        return None
+
+    cleaned = url.strip()
+    parsed = urlparse(cleaned)
+    authority = extract_host_domain(cleaned)
+    if parsed.scheme.lower() not in {"http", "https"} or not authority:
+        return None
+
+    return f"{parsed.scheme.lower()}://{authority}"
+
+
+def extract_anime_slug(url: str) -> str | None:
+    """Return the ``<id>-<slug>`` segment from a user-supplied anime page URL."""
+    if not url or not url.strip():
+        return None
+
+    parsed = urlparse(validate_url(url.strip()))
+    match = _ANIME_SLUG_PATTERN.match(parsed.path)
+    if match is None:
+        return None
+
+    return match.group(1)
+
+
+def build_info_api_url(url: str) -> str | None:
+    """Build the series info API URL on the same origin as ``url``.
+
+    ``url`` is the page the user supplied. The scheme and host are copied from
+    it; nothing is rewritten onto a built-in domain.
+    """
+    origin = extract_origin(url)
+    slug = extract_anime_slug(url)
+    if origin is None or slug is None:
+        return None
+
+    return f"{origin}/info_api/{slug}"
+
+
+def build_embed_url(page_url: str, episode_id: str) -> str | None:
+    """Build one embed URL on the same origin as the user-supplied page URL."""
+    origin = extract_origin(page_url)
+    if origin is None:
+        return None
+
+    return f"{origin}/embed-url/{episode_id}"
+
+
 def extract_name_from_title_tag(title_tag: Tag) -> str:
     """Extract the anime name from the title tag."""
     title_text = title_tag.string
