@@ -51,12 +51,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 #    the function so it flips ``check_hostname = False`` *before* the
 #    ``verify_mode`` write when ``cert_reqs`` is not ``CERT_REQUIRED``.
 #
-# 2. ``cloudscraper.CipherSuiteAdapter.wrap_socket`` itself does
-#    ``self.ssl_context.check_hostname = False`` without touching
-#    ``verify_mode``. Same problem: leaves the context inconsistent for
-#    the next caller. Patch it to also set ``verify_mode = CERT_NONE``
-#    (or ``CERT_REQUIRED`` in the no-SNI branch) so the context is
-#    consistent before the underlying ``orig_wrap_socket`` runs.
+# 2. ``cloudscraper.CipherSuiteAdapter.wrap_socket`` flips
+#    ``check_hostname`` without regard to the current ``verify_mode``. On
+#    3.14 that leaves the context illegal for the next caller. We only
+#    sync ``check_hostname`` to whatever ``verify_mode`` urllib3 already
+#    set from ``session.verify`` — we must NOT force ``CERT_REQUIRED`` in
+#    the no-SNI branch. Doing so re-enables verification after
+#    ``scraper.verify = False`` and surfaces
+#    ``SSLCertVerificationError: unable to get local issuer certificate``
+#    on machines whose CA store cannot verify the peer (common on macOS
+#    Python installs).
 def _ssl_wrap_socket_and_match_hostname_consistent(**kwargs):  # noqa: ANN001
     ssl_context = kwargs.get("ssl_context")
     cert_reqs = kwargs.get("cert_reqs")
@@ -81,15 +85,17 @@ urllib3.connection._ssl_wrap_socket_and_match_hostname = (
 
 
 def _wrap_socket_consistent_verify_mode(self, *args, **kwargs):  # noqa: ANN001
+    """Keep check_hostname consistent with verify_mode; never override verify."""
     if hasattr(self.ssl_context, "server_hostname") and self.ssl_context.server_hostname:
         kwargs["server_hostname"] = self.ssl_context.server_hostname
+        # SNI override path: hostname checking cannot apply. Leave
+        # verify_mode as urllib3 set it from session.verify.
         self.ssl_context.check_hostname = False
-        # Must follow the check_hostname flip: setting verify_mode=CERT_NONE
-        # while check_hostname is still True is the exact 3.14 failure mode.
-        self.ssl_context.verify_mode = ssl.CERT_NONE
+    elif self.ssl_context.verify_mode == ssl.CERT_NONE:
+        # verify=False: check_hostname must stay False (3.14 + intent).
+        self.ssl_context.check_hostname = False
     else:
         self.ssl_context.check_hostname = True
-        self.ssl_context.verify_mode = ssl.CERT_REQUIRED
     return self.ssl_context.orig_wrap_socket(*args, **kwargs)
 
 
@@ -112,8 +118,16 @@ def prepare_cloudscraper_session() -> CloudScraper:
         },
     )
 
-    # Disable SSL verification
+    # Disable SSL verification on the session *and* on the CipherSuiteAdapter
+    # context. Session.verify alone is not enough: cloudscraper's custom
+    # ssl_context starts as CERT_REQUIRED/check_hostname=True, and a buggy
+    # wrap_socket sync previously re-forced CERT_REQUIRED on every request.
     scraper.verify = False
+    https_adapter = scraper.adapters.get("https://")
+    ssl_context = getattr(https_adapter, "ssl_context", None)
+    if ssl_context is not None:
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
     return scraper
 
 

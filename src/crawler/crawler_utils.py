@@ -361,14 +361,19 @@ _BODY_INVALID_MARKERS = (
 def _body_looks_valid(body: str) -> bool:
     """Return True if the body looks like a real embed page, not a challenge.
 
-    A response is invalid if it is empty or contains any of the explicit
-    Cloudflare challenge markers. Otherwise it is valid if it contains at
-    least one of the positive embed/player markers. The negative check is
-    sharp on purpose so a future embed-page redesign that drops one of the
-    positive markers does not silently accept a challenge page.
+    Accept a bare player URL as plain text (what ``/embed-url/{id}`` returns
+    today), including hosts other than vixcloud — ``_get_video_url`` already
+    re-checks that the body is a URL. HTML bodies must not contain Cloudflare
+    challenge markers and must include at least one positive embed/player
+    marker.
     """
     if not body:
         return False
+
+    stripped = body.strip()
+    if stripped.startswith(("http://", "https://")) and "<" not in stripped:
+        return True
+
     lowered = body.lower()
     if any(marker in lowered for marker in _BODY_INVALID_MARKERS):
         return False
