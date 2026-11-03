@@ -269,7 +269,13 @@ class Crawler:
         if response is None:
             return None
 
-        text = response.text.strip()
+        # Some mirrors return the player URL twice on separate lines. Use the
+        # first non-empty line so a multi-line body is not passed downstream
+        # as a single malformed URL.
+        text = next(
+            (line.strip() for line in response.text.splitlines() if line.strip()),
+            "",
+        )
 
         # Sanity-check: a Cloudflare challenge page slipping through the
         # body validator would otherwise be passed to fetch_page() as a URL
