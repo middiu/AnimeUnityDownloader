@@ -131,7 +131,11 @@ def prepare_cloudscraper_session() -> CloudScraper:
     return scraper
 
 
-def fetch_page_cloudflare(url: str, timeout: int = 10) -> BeautifulSoup:
+def fetch_page_cloudflare(
+    url: str,
+    timeout: int = 10,
+    referer: str | None = None,
+) -> BeautifulSoup:
     """Fetch HTML content from a Cloudflare-protected webpage using cloudscraper."""
     # Add random delay to avoid bot detection
     add_random_delay()
@@ -142,6 +146,8 @@ def fetch_page_cloudflare(url: str, timeout: int = 10) -> BeautifulSoup:
     # Get headers and update them
     headers = prepare_headers()
     headers.update(ENCODING_HEADERS)
+    if referer:
+        headers["Referer"] = referer
 
     try:
         # Make the request using cloudscraper
@@ -190,8 +196,12 @@ def decompress_response(response: requests.Response) -> str:
     return response.text
 
 
-def fetch_page(url: str, timeout: int = 10) -> BeautifulSoup:
-    """Fetch the HTML content of a webpage with better bot detection avoidance."""
+def fetch_page(
+    url: str,
+    timeout: int = 10,
+    referer: str | None = None,
+) -> BeautifulSoup:
+    """Fetch webpage HTML, optionally identifying the page that embedded it."""
     # Add random delay to avoid bot detection
     add_random_delay()
 
@@ -202,6 +212,11 @@ def fetch_page(url: str, timeout: int = 10) -> BeautifulSoup:
     # Add additional headers to look more like a real browser
     headers = prepare_headers()
     headers.update(DEFAULT_HEADERS)
+    if referer:
+        # VixCloud rejects embed requests that do not identify the AnimeUnity
+        # page embedding the player. Use the user-supplied page rather than a
+        # hardcoded host so mirrors keep working.
+        headers["Referer"] = referer
 
     try:
         # First attempt: normal request
@@ -228,7 +243,7 @@ def fetch_page(url: str, timeout: int = 10) -> BeautifulSoup:
         ):
             # Fallback to cloudscraper for Cloudflare protection
             try:
-                return fetch_page_cloudflare(url, timeout)
+                return fetch_page_cloudflare(url, timeout, referer=referer)
 
             except requests.exceptions.RequestException as cf_err:
                 log_message = f"Cloudscraper fallback failed for {url}: {cf_err}"

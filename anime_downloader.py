@@ -19,6 +19,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 import requests
@@ -97,11 +98,16 @@ def download_episode(
         )
 
 
-def process_video_url(video_url: str, download_path: str, task_info: tuple) -> None:
+def process_video_url(
+    video_url: str,
+    download_path: str,
+    task_info: tuple,
+    referer: str | None = None,
+) -> None:
     """Process an embed URL to extract episode download links."""
     job_progress, task, _overall_task = task_info
     try:
-        soup = fetch_page(video_url)
+        soup = fetch_page(video_url, referer=referer)
     except SystemExit as exit_error:
         # ``fetch_page`` calls ``sys.exit(1)`` on 403 / unrecoverable network
         # errors. Surface those as a per-episode failure so one bad URL does
@@ -128,12 +134,14 @@ def download_anime(
     download_path: str,
     progress_callback: Callable[[dict], None] | None = None,
     max_workers: int | None = None,
+    referer: str | None = None,
 ) -> None:
     """Download episodes of a specified anime from provided video URLs."""
+    process_url = partial(process_video_url, referer=referer)
     if progress_callback is not None:
         job_progress = CallbackProgress(progress_callback)
         run_in_parallel(
-            process_video_url,
+            process_url,
             video_urls,
             job_progress,
             download_path,
@@ -146,7 +154,7 @@ def download_anime(
 
     with Live(progress_table, refresh_per_second=10):
         run_in_parallel(
-            process_video_url,
+            process_url,
             video_urls,
             job_progress,
             download_path,
@@ -199,6 +207,7 @@ async def process_anime_download(
         download_path,
         progress_callback,
         max_workers=max_workers,
+        referer=url,
     )
 
 
